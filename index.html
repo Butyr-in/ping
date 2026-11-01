@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест Веб-Пинга</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #121214;
+            color: #e1e1e6;
+            max-width: 650px;
+            margin: 10px auto;
+            padding: 10px 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #ffffff;
+            margin: 5px 0 12px 0;
+            font-size: 24px;
+        }
+        .controls-box {
+            background-color: #202024;
+            border: 1px solid #29292e;
+            padding: 10px 14px;
+            border-radius: 6px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .controls-box label {
+            font-size: 14px;
+            color: #a8a8b3;
+        }
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 46px;
+            height: 22px;
+        }
+        .switch input { 
+            opacity: 0; width: 0; height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #494950;
+            transition: .2s;
+            border-radius: 22px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px; width: 16px;
+            left: 3px; bottom: 3px;
+            background-color: white;
+            transition: .2s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #8257e5;
+        }
+        input:checked + .slider:before {
+            transform: translateX(24px);
+        }
+        .mode-status {
+            font-size: 13px;
+            font-weight: bold;
+            color: #a8a8b3;
+            min-width: 90px;
+            text-align: right;
+        }
+        button {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            background-color: #8257e5;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            margin-bottom: 15px;
+        }
+        button:hover {
+            background-color: #9466ff;
+        }
+        button:disabled {
+            background-color: #494950;
+            cursor: not-allowed;
+        }
+        .category-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #8257e5;
+            margin: 10px 0 5px 5px;
+            font-weight: bold;
+        }
+        .server-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background-color: #202024;
+            border-radius: 6px;
+            margin-bottom: 5px;
+            border: 1px solid #29292e;
+        }
+        .server-name {
+            font-weight: 500;
+            font-size: 14px;
+            flex: 1;
+        }
+        .editable-name-box {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 1;
+        }
+        .editable-name-box span {
+            font-weight: 500;
+            font-size: 14px;
+            color: #e1e1e6;
+            white-space: nowrap;
+        }
+        .inline-input {
+            background-color: #121214;
+            border: 1px solid #29292e;
+            color: #04d361;
+            font-family: monospace;
+            font-size: 13px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            width: 60%;
+            font-weight: bold;
+        }
+        .inline-input:focus {
+            outline: 1px solid #8257e5;
+            border-color: transparent;
+        }
+        .ping-value {
+            font-family: monospace;
+            font-size: 14px;
+            font-weight: bold;
+            padding: 3px 6px;
+            border-radius: 4px;
+            min-width: 60px;
+            text-align: center;
+            margin-left: 10px;
+        }
+        .ping-waiting { color: #8c8c9d; }
+        .ping-loading { color: #ffcd1e; }
+        .ping-good { color: #04d361; background-color: rgba(4, 211, 97, 0.1); }
+        .ping-medium { color: #ffcd1e; background-color: rgba(255, 205, 30, 0.1); }
+        .ping-bad { color: #f75a68; background-color: rgba(247, 90, 104, 0.1); }
+    </style>
+</head>
+<body>
+
+    <h1>Тест задержки (Веб-пинг)</h1>
+
+    <div class="controls-box">
+        <label>Режим тестирования:</label>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <span class="mode-status" id="modeLabel">По очереди</span>
+            <label class="switch">
+                <input type="checkbox" id="modeToggle" onchange="saveMode()">
+                <span class="slider"></span>
+            </label>
+        </div>
+    </div>
+
+    <button id="startBtn" onclick="startTest()">Запустить тест</button>
+
+    <div id="serverList"></div>
+    <script>
+        const defaultCustomUrl = "https://redstarpoker.eu"; 
+        
+        // Восстановление режима тестирования из памяти браузера
+        let savedMode = localStorage.getItem('userParallelMode') === 'true';
+        document.getElementById('modeToggle').checked = savedMode;
+        updateModeLabel(savedMode);
+
+        function saveMode() {
+            const isParallel = document.getElementById('modeToggle').checked;
+            localStorage.setItem('userParallelMode', isParallel);
+            updateModeLabel(isParallel);
+        }
+
+        function updateModeLabel(isParallel) {
+            document.getElementById('modeLabel').innerText = isParallel ? "Одновременно" : "По очереди";
+        }
+
+        function saveInlineUrl() {
+            let inputEl = document.getElementById('inlineCustomUrl');
+            let val = inputEl.value.trim();
+            if (val && !val.startsWith('http://') && !val.startsWith('https://')) {
+                val = 'https://' + val;
+                inputEl.value = val;
+            }
+            localStorage.setItem('userCustomPingUrl', val);
+            
+            // Обновляем URL атрибут у контейнера, чтобы тест шел по новому адресу без перезагрузки
+            let container = inputEl.closest('.server-item');
+            if (container) {
+                container.setAttribute('data-url', val);
+            }
+        }
+
+        const itemsData = [
+            { cat: "Локальные ресурсы (РФ)", name: "Яндекс (Москва)", url: "https://ya.ru" },
+            { cat: "Локальные ресурсы (РФ)", name: "VK (СПб / Москва)", url: "https://vk.com" },
+            { cat: "Локальные ресурсы (РФ)", name: "Rutube", url: "https://rutube.ru" },
+            
+            { cat: "Глобальные узлы и Европа", name: "Google (Глобальный)", url: "https://google.com" },
+            { cat: "Глобальные узлы и Европа", name: "Twitch (Прямые трансляции)", url: "https://twitch.tv" },
+            { cat: "Глобальные узлы и Европа", name: "Steam (Игровые сервера)", url: "https://steampowered.com" },
+            
+            { cat: "Заблокировано / Замедлено в РФ (Проверка VPN)", name: "DigitalOcean Server (Германия)", url: "https://digitalocean.com" },
+            { cat: "Заблокировано / Замедлено в РФ (Проверка VPN)", name: "Telegram (Веб-серверы)", url: "https://telegram.org" },
+            { cat: "Заблокировано / Замедлено в РФ (Проверка VPN)", name: "Discord", url: "https://discord.com" },
+            { cat: "Заблокировано / Замедлено в РФ (Проверка VPN)", name: "YouTube", url: "https://youtube.com" },
+            { cat: "Заблокировано / Замедлено в РФ (Проверка VPN)", name: "Instagram", url: "https://instagram.com" },
+            { cat: "Заблокировано / Замедлено в РФ (Проверка VPN)", name: "X / Twitter", url: "https://x.com" },
+            { cat: "Заблокировано / Замедлено в РФ (Проверка VPN)", name: "Facebook", url: "https://facebook.com" },
+            { cat: "Заблокировано / Замедлено в РФ (Проверка VPN)", name: "Pornhub", url: "https://pornhub.com" }
+        ];
+
+        function renderList() {
+            const currentCustom = localStorage.getItem('userCustomPingUrl') || defaultCustomUrl;
+            const serverListDiv = document.getElementById('serverList');
+            serverListDiv.innerHTML = ""; 
+            
+            let currentCat = "";
+            
+            // Выводим основные ресурсы
+            itemsData.forEach((target, index) => {
+                if (target.cat !== currentCat) {
+                    currentCat = target.cat;
+                    serverListDiv.innerHTML += `<div class="category-title">${currentCat}</div>`;
+                }
+                serverListDiv.innerHTML += `
+                    <div class="server-item" data-url="${target.url}">
+                        <span class="server-name">${target.name}</span>
+                        <span class="ping-value ping-waiting" id="ping-${index}">ожидание</span>
+                    </div>
+                `;
+            });
+
+            // Добавляем категорию ручного ввода со встроенным текстовым полем
+            serverListDiv.innerHTML += `<div class="category-title">Ручной ввод</div>`;
+            serverListDiv.innerHTML += `
+                <div class="server-item" data-url="${currentCustom}">
+                    <div class="editable-name-box">
+                        <span>Свой сайт:</span>
+                        <input type="text" id="inlineCustomUrl" class="inline-input" value="${currentCustom}" onchange="saveInlineUrl()">
+                    </div>
+                    <span class="ping-value ping-waiting" id="ping-custom">ожидание</span>
+                </div>
+            `;
+        }
+
+        async function pingTarget(url) {
+            const start = performance.now();
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+            try {
+                let targetUrl = url;
+                if (url.startsWith('http')) {
+                    const joiner = url.includes('?') ? '&' : '?';
+                    targetUrl = `${url}${joiner}nocache=${Date.now()}`;
+                }
+
+                await fetch(targetUrl, { 
+                    method: 'HEAD', 
+                    mode: 'no-cors',
+                    cache: 'no-store',
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                return Math.round(performance.now() - start);
+            } catch (error) {
+                clearTimeout(timeoutId);
+                return null;
+            }
+        }
+
+        async function runSingleItemTest(label, url) {
+            label.className = "ping-value ping-loading";
+            label.innerText = "...";
+
+            let sum = 0;
+            let validChecks = 0;
+            
+            for (let j = 0; j < 3; j++) {
+                const res = await pingTarget(url);
+                if (res !== null) {
+                    sum += res;
+                    validChecks++;
+                }
+                await new Promise(r => setTimeout(r, 30));
+            }
+
+            if (validChecks > 0) {
+                const avgPing = Math.round(sum / validChecks);
+                label.innerText = `${avgPing} ms`;
+                
+                if (avgPing < 60) label.className = "ping-value ping-good";
+                else if (avgPing < 160) label.className = "ping-value ping-medium";
+                else label.className = "ping-value ping-bad";
+            } else {
+                label.innerText = "Блок";
+                label.className = "ping-value ping-bad";
+            }
+        }
+
+        async function startTest() {
+            // Мягкий сброс только значений пинга без полной перерисовки HTML, чтобы поле ввода не теряло фокус
+            const labels = document.querySelectorAll('.ping-value');
+            labels.forEach(l => {
+                l.className = "ping-value ping-waiting";
+                l.innerText = "ожидание";
+            });
+
+            const btn = document.getElementById('startBtn');
+            const isParallel = document.getElementById('modeToggle').checked;
+            
+            btn.disabled = true;
+            btn.innerText = "Тестирование...";
+
+            if (isParallel) {
+                const promises = [];
+                labels.forEach((label) => {
+                    const url = label.closest('.server-item').getAttribute('data-url');
+                    promises.push(runSingleItemTest(label, url));
+                });
+                await Promise.all(promises);
+            } else {
+                for (let i = 0; i < labels.length; i++) {
+                    const label = labels[i];
+                    const url = label.closest('.server-item').getAttribute('data-url');
+                    await runSingleItemTest(label, url);
+                }
+            }
+
+            btn.disabled = false;
+            btn.innerText = "Запустить тест заново";
+        }
+
+        // Первичный вывод списка при загрузке страницы
+        renderList();
+    </script>
+</body>
+</html>
